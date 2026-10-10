@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { zStudentPostBody, zStudentId } from "../libs/zodValidators.js";
+import { zStudentPostBody, zStudentId, zStudentPutBody } from "../libs/zodValidators.js";
 
 import type { Student, CustomRequest } from "../libs/types.js";
 
@@ -182,5 +182,45 @@ router.post(
     }
   },
 );
+
+router.put("/", authenticateToken, checkRoles, async (req: CustomRequest, res: Response) => {
+  try {
+    const result = zStudentPutBody.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ success: false, message: "Validation failed", errors: result.error.issues[0]?.message });
+    const { studentId, firstName, lastName, program, interests, emails } = result.data;
+    if (req.user?.role === "STUDENT" && studentId !== req.user.studentId)
+      return res.status(403).json({ success: false, message: "Forbidden access" });
+    if (!await prisma.student.findUnique({ where: { studentId } }))
+      return res.status(404).json({ success: false, message: "Student does not exist" });
+    const data = await prisma.student.update({ where: { studentId }, data: {
+      ...(firstName != null ? { firstName } : {}),
+      ...(lastName != null ? { lastName } : {}),
+      ...(program != null ? { program } : {}),
+      ...(interests != null ? { interests } : {}),
+      ...(emails != null ? { emails } : {}),
+    } });
+    return res.status(200).json({ success: true, message: "Student updated", data });
+  } catch {
+    return res.status(500).json({ success: false, message: "Unable to update student" });
+  }
+});
+
+router.delete("/", authenticateToken, checkRoleAdmin, async (req: CustomRequest, res: Response) => {
+  try {
+    const result = zStudentId.safeParse(req.body?.studentId);
+    if (!result.success) return res.status(400).json({ success: false, message: "Validation failed", errors: result.error.issues[0]?.message });
+    const studentId = result.data;
+    if (!await prisma.student.findUnique({ where: { studentId } }))
+      return res.status(404).json({ success: false, message: "Student does not exist" });
+    const [, , data] = await prisma.$transaction([
+      prisma.enrollment.deleteMany({ where: { studentId } }),
+      prisma.file.deleteMany({ where: { studentId } }),
+      prisma.student.delete({ where: { studentId } }),
+    ]);
+    return res.status(200).json({ success: true, message: "Student deleted", data });
+  } catch {
+    return res.status(500).json({ success: false, message: "Unable to delete student" });
+  }
+});
 
 export default router;

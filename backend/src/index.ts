@@ -10,7 +10,7 @@ import notFoundMiddleware from "./middlewares/notFoundMiddleware.ts";
 
 // Check DB connection
 import { checkDatabaseConnection } from "./libs/checkDbConnection.ts";
-checkDatabaseConnection();
+if (!process.env.VERCEL) checkDatabaseConnection();
 
 // import routers
 import studentRouter_v3 from "./routes/studentsRoutes_v3.ts";
@@ -26,7 +26,7 @@ const port = process.env.PORT || 3000;
 // ตั้งค่า origin ได้หลายค่าคั่นด้วย "," ผ่าน CORS_ORIGIN ใน .env
 app.use(
   cors({
-    origin: (process.env.CORS_ORIGIN || "http://localhost:5173").split(","),
+    origin: (process.env.CORS_ORIGIN || "http://localhost:5173").split(",").map((origin) => origin.trim()),
   }),
 );
 
@@ -69,9 +69,11 @@ app.use("/api/v3/enrollments", enrollmentRouter_v3);
 // endpoint check middleware
 app.use(notFoundMiddleware);
 
-app.listen(port, () => {
-  console.log(`🚀 Server running on http://localhost:${port}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`🚀 Server running on http://localhost:${port}`);
+  });
+}
 
 // Export app for vercel deployment
 export default app;
